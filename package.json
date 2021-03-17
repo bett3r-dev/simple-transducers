@@ -1,7 +1,8 @@
 {
   "name": "simple-transducers",
   "version": "1.0.0",
-  "main": "build/Transducers.js",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
   "license": "MIT",
   "scripts": {
     "test": "NODE_ENV=test nyc ts-mocha \"src/{,**/}*.test.ts\" --exit",

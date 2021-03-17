@@ -1,4 +1,4 @@
-import t from './Transducers';
+import t from '.';
 import sinon from 'sinon';
 const {
   seq,
