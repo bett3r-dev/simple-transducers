@@ -55,3 +55,4 @@ declare const _default: {
     seq: typeof seq;
 };
 export default _default;
+//# sourceMappingURL=index.d.ts.map
