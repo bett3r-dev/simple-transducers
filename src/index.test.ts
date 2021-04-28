@@ -119,6 +119,20 @@ describe( 'transducers', function() {
         ); //?.$
         assert.equal( result, 100 );
       });
+      it( 'works with strings for seq, compose', () => {
+        const parts = 'hola mi pana'.split(/[_\s\-]/);
+        const result = seq(
+          compose(
+            filter( (part: string) => !!part ),
+            map((part:string, index:number) => {
+              return index === 0 ? part : part[0].toUpperCase() + part.slice(1);
+            }),
+            reduce(( accumulate: string, current:string ) => accumulate + current, '' ),
+          ),
+          parts
+        ); //?.$
+        assert.equal( result, 'holaMiPana' );
+      });
     });
     describe( 'into', function() {
       it( 'accepts curring', () => {

@@ -4,7 +4,7 @@ const ensureArray = <T>( theArray: T | T[] ): T[] => isArray( theArray ) ? theAr
 
 export interface Transducer{
   'init'?: <T>(initialValue?: T) => Iterable<T> | {[key:string]: T} | void
-  'step'?: <TInput, TResult>(accumulated: TResult, current: TInput) => TResult | Reduced<TResult>
+  'step'?: <TInput, TResult>(accumulated: TResult, current: TInput, index?:number) => TResult | Reduced<TResult>
   'value'?: <TResult>() => TResult
   'result'?: <TResult>(result:TResult) => TResult
   '@@transducer/init'?: <T>(initialValue?: T) => Iterable<T> | {[key:string]: T} | void
@@ -106,9 +106,9 @@ const ObjectReducer = ()=>StandardReducer({
 //*******************************************
 // Transformer types
 //*******************************************
-const MapReducer = <TInput, TResult>( fn: (curr: TInput, acc: TResult) => TResult | Reduced<TResult>, reducer: Transducer ) => StandardReducer({
+const MapReducer = <TInput, TResult>( fn: (curr: TInput, index:number, acc: TResult) => TResult | Reduced<TResult>, reducer: Transducer ) => StandardReducer({
   ...defaultReducerProps( reducer ),
-  '@@transducer/step': ( acc, curr ) => step( reducer )( acc, fn( curr, acc )),
+  '@@transducer/step': ( acc, curr, index ) => step( reducer )( acc, fn( curr, index, acc )),
 });
 
 const FlatMapReducer = <TInput, TResult>( fn: (curr: TInput) => TResult | Reduced<TResult>, reducer: Transducer ) => StandardReducer({
@@ -122,22 +122,22 @@ const FlatMapReducer = <TInput, TResult>( fn: (curr: TInput) => TResult | Reduce
   },
 });
 
-const FilterReducer = <TInput, TResult>( predicate: (curr: TInput, acc: TResult) => boolean, reducer: Transducer ) => StandardReducer({
+const FilterReducer = <TInput, TResult>( predicate: (curr: TInput, acc: TResult, index: number) => boolean, reducer: Transducer ) => StandardReducer({
   ...defaultReducerProps( reducer ),
-  '@@transducer/step': ( acc, curr ) => predicate( curr, acc ) ? step( reducer )( acc, curr ) : acc,
+  '@@transducer/step': ( acc, curr, index ) => predicate( curr, acc, index ) ? step( reducer )( acc, curr, index ) : acc,
 });
 
-const WhileReducer = <TInput, TResult>( predicate: (curr: TInput, acc: TResult) => boolean, reducer: Transducer ) => StandardReducer({
+const WhileReducer = <TInput, TResult>( predicate: (curr: TInput, index:number, acc: TResult) => boolean, reducer: Transducer ) => StandardReducer({
   ...defaultReducerProps( reducer ),
-  '@@transducer/step': ( acc, curr ) => predicate( curr, acc ) ? step( reducer )( acc, curr ) : Reduced( acc )
+  '@@transducer/step': ( acc, curr, index ) => predicate( curr, acc, index ) ? step( reducer )( acc, curr, index ) : Reduced( acc )
 });
 
 const ReduceReducer = <TInput, TResult>( fn: (accumulated: TResult | Reduced<TResult>, current: TInput) => TResult | Reduced<TResult>, initial:TResult | Reduced<TResult>, reducer: Transducer ) => StandardReducer({
   ...defaultReducerProps( reducer ),
   '@@transducer/result': () => initial,
-  '@@transducer/step': ( acc: CollectionResult<TResult>, curr: TInput ) => {
+  '@@transducer/step': ( acc: CollectionResult<TResult>, curr: TInput, index:number ) => {
     initial = fn( initial, curr );
-    return step( reducer )( acc, curr );
+    return step( reducer )( acc, curr, index );
   },
 });
 
@@ -145,13 +145,13 @@ const ReduceReducer = <TInput, TResult>( fn: (accumulated: TResult | Reduced<TRe
 // operations
 //*******************************************
 
-const map = <TInput, TResult>(fn: (curr: TInput, acc: TResult) => TResult | Reduced<TResult>) => (reducer: Transducer) => MapReducer( fn, reducer );
+const map = <TInput, TResult>(fn: (curr: TInput, index:number, acc: TResult) => TResult | Reduced<TResult>) => (reducer: Transducer) => MapReducer( fn, reducer );
 const flatMap = <TInput, TResult>(fn: (curr: TInput) => TResult | Reduced<TResult>) => (reducer: Transducer) => FlatMapReducer( fn, reducer );
 const reduce = <TInput, TResult>(  fn: (accumulated: TResult | Reduced<TResult>, current: TInput) => TResult | Reduced<TResult>, initial:TResult | Reduced<TResult> ) => (reducer: Transducer) => ReduceReducer( fn, initial, reducer );
-const filter = <TInput, TResult>(predicate: (curr: TInput, acc: TResult) => boolean) => (reducer: Transducer) => FilterReducer( predicate, reducer );
+const filter = <TInput, TResult>(predicate: (curr: TInput, acc: TResult, index:number) => boolean) => (reducer: Transducer) => FilterReducer( predicate, reducer );
 const take = ( count = Infinity ) => (reducer: Transducer) => WhileReducer(() => count-- > 0, reducer );
 const skip = ( count = 0 ) => (reducer: Transducer) => FilterReducer(() => count-- <= 0, reducer );
-const takeUntil = <TInput, TResult>(predicate: ( curr: TInput, acc: TResult) => boolean) => (reducer: Transducer) => WhileReducer(( value: TInput, acc: TResult ) => predicate( value, acc ), reducer );
+const takeUntil = <TInput, TResult>(predicate: ( curr: TInput, acc: TResult) => boolean) => (reducer: Transducer) => WhileReducer(( value: TInput, index:number, acc: TResult ) => predicate( value, acc ), reducer );
 const dedupe = <T>( allValues? : boolean, lastValue?: T ) => (reducer: Transducer) => FilterReducer(( value: T, acc ) => {
   let notDuped;
   if ( !allValues ){
@@ -162,7 +162,7 @@ const dedupe = <T>( allValues? : boolean, lastValue?: T ) => (reducer: Transduce
   }
   return notDuped;
 }, reducer );
-const skipWhile = <TInput, TResult>( predicate: ( curr: TInput, acc: TResult,) => boolean, state: boolean = false ) => (reducer: Transducer) => FilterReducer(( value: TInput, acc: TResult ) => {
+const skipWhile = <TInput, TResult>( predicate: ( curr: TInput, acc: TResult,) => boolean, state: boolean = false ) => (reducer: Transducer) => FilterReducer(( value: TInput, acc: TResult,  index:number ) => {
   if ( !state )
     return state = !predicate( value, acc );
   return true;
@@ -176,13 +176,15 @@ const transduce = <TInput, TResult>( transformer: (reducer:Transducer) => Transd
   let accumulation: any = initialValue;
   const iter = getIterator( collection );
   let val = iter.next();
+  let index = 0;
   while( !val.done ) {
-    accumulation = step( transformedReducer )( accumulation, val.value );
+    accumulation = step( transformedReducer )( accumulation, val.value, index );
     if( isReduced( accumulation )) {
       accumulation = value( accumulation );
       break;
     }
     val = iter.next();
+    index++;
   }
   return result( transformedReducer )( accumulation );
 };
