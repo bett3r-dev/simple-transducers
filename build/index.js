@@ -82,7 +82,7 @@ const ObjectReducer = () => StandardReducer({
 //*******************************************
 const MapReducer = (fn, reducer) => StandardReducer({
     ...defaultReducerProps(reducer),
-    '@@transducer/step': (acc, curr) => step(reducer)(acc, fn(curr, acc)),
+    '@@transducer/step': (acc, curr, index) => step(reducer)(acc, fn(curr, index, acc)),
 });
 const FlatMapReducer = (fn, reducer) => StandardReducer({
     ...defaultReducerProps(reducer),
@@ -97,18 +97,18 @@ const FlatMapReducer = (fn, reducer) => StandardReducer({
 });
 const FilterReducer = (predicate, reducer) => StandardReducer({
     ...defaultReducerProps(reducer),
-    '@@transducer/step': (acc, curr) => predicate(curr, acc) ? step(reducer)(acc, curr) : acc,
+    '@@transducer/step': (acc, curr, index) => predicate(curr, acc, index) ? step(reducer)(acc, curr, index) : acc,
 });
 const WhileReducer = (predicate, reducer) => StandardReducer({
     ...defaultReducerProps(reducer),
-    '@@transducer/step': (acc, curr) => predicate(curr, acc) ? step(reducer)(acc, curr) : Reduced(acc)
+    '@@transducer/step': (acc, curr, index) => predicate(curr, acc, index) ? step(reducer)(acc, curr, index) : Reduced(acc)
 });
 const ReduceReducer = (fn, initial, reducer) => StandardReducer({
     ...defaultReducerProps(reducer),
     '@@transducer/result': () => initial,
-    '@@transducer/step': (acc, curr) => {
+    '@@transducer/step': (acc, curr, index) => {
         initial = fn(initial, curr);
-        return step(reducer)(acc, curr);
+        return step(reducer)(acc, curr, index);
     },
 });
 //*******************************************
@@ -120,7 +120,7 @@ const reduce = (fn, initial) => (reducer) => ReduceReducer(fn, initial, reducer)
 const filter = (predicate) => (reducer) => FilterReducer(predicate, reducer);
 const take = (count = Infinity) => (reducer) => WhileReducer(() => count-- > 0, reducer);
 const skip = (count = 0) => (reducer) => FilterReducer(() => count-- <= 0, reducer);
-const takeUntil = (predicate) => (reducer) => WhileReducer((value, acc) => predicate(value, acc), reducer);
+const takeUntil = (predicate) => (reducer) => WhileReducer((value, index, acc) => predicate(value, acc), reducer);
 const dedupe = (allValues, lastValue) => (reducer) => FilterReducer((value, acc) => {
     let notDuped;
     if (!allValues) {
@@ -132,7 +132,7 @@ const dedupe = (allValues, lastValue) => (reducer) => FilterReducer((value, acc)
     }
     return notDuped;
 }, reducer);
-const skipWhile = (predicate, state = false) => (reducer) => FilterReducer((value, acc) => {
+const skipWhile = (predicate, state = false) => (reducer) => FilterReducer((value, acc, index) => {
     if (!state)
         return state = !predicate(value, acc);
     return true;
@@ -145,13 +145,15 @@ const transduce = (transformer, reducer, initialValue, collection) => {
     let accumulation = initialValue;
     const iter = getIterator(collection);
     let val = iter.next();
+    let index = 0;
     while (!val.done) {
-        accumulation = step(transformedReducer)(accumulation, val.value);
+        accumulation = step(transformedReducer)(accumulation, val.value, index);
         if (isReduced(accumulation)) {
             accumulation = value(accumulation);
             break;
         }
         val = iter.next();
+        index++;
     }
     return result(transformedReducer)(accumulation);
 };
